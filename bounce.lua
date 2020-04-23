@@ -43,6 +43,7 @@ local function find_scene_item()
       scene_width = obs.obs_source_get_width(source)
       scene_height = obs.obs_source_get_height(source)
       local scene = obs.obs_scene_from_source(source)
+      obs.obs_source_release(source)
       if scene then
          scene_item = obs.obs_scene_find_source(scene, source_name)
          if scene_item then
