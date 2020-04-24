@@ -79,7 +79,6 @@ function script_load(settings)
    local hotkey_save_array = obs.obs_data_get_array(settings, 'toggle_hotkey')
    obs.obs_hotkey_load(hotkey_id, hotkey_save_array)
    obs.obs_data_array_release(hotkey_save_array)
-   obs.obs_frontend_add_event_callback(on_event)
 end
 
 function script_save(settings)
