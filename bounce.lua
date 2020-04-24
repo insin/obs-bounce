@@ -23,37 +23,23 @@ local scene_width = nil
 --- height of the scene the scene item belongs to
 local scene_height = nil
 
---- get the name of the current scene
-local function current_scene_name()
-   local source = obs.obs_frontend_get_current_scene()
-   local name = obs.obs_source_get_name(source)
-   obs.obs_source_release(source)
-   return name
-end
-
---- find the named scene item and its original position
+--- find the named scene item and its original position in the current scene
 local function find_scene_item()
-   local scene_name = current_scene_name()
-   if not scene_name then
+   local source = obs.obs_frontend_get_current_scene()
+   if not source then
       print('there is no current scene')
       return
    end
-   local source = obs.obs_get_source_by_name(scene_name)
-   if source then
-      scene_width = obs.obs_source_get_width(source)
-      scene_height = obs.obs_source_get_height(source)
-      local scene = obs.obs_scene_from_source(source)
-      obs.obs_source_release(source)
-      if scene then
-         scene_item = obs.obs_scene_find_source(scene, source_name)
-         if scene_item then
-            original_pos = get_scene_item_pos(scene_item)
-            return true
-         end
-      end
+   scene_width = obs.obs_source_get_width(source)
+   scene_height = obs.obs_source_get_height(source)
+   local scene = obs.obs_scene_from_source(source)
+   obs.obs_source_release(source)
+   scene_item = obs.obs_scene_find_source(scene, source_name)
+   if scene_item then
+      original_pos = get_scene_item_pos(scene_item)
+      return true
    end
-   print(source_name..' not found in '..scene_name)
-   scene_item = nil
+   print(source_name..' not found')
    return false
 end
 
@@ -154,8 +140,8 @@ end
 function move_scene_item(scene_item)
    local pos = get_scene_item_pos(scene_item)
    local scale = get_scene_item_scale(scene_item)
-   local source = obs.obs_sceneitem_get_source(scene_item)
    local crop = get_scene_item_crop(scene_item)
+   local source = obs.obs_sceneitem_get_source(scene_item)
    -- displayed dimensions need to account for cropping and scaling
    local width = round((obs.obs_source_get_width(source) - crop.left - crop.right) * scale.x)
    local height = round((obs.obs_source_get_height(source) - crop.top - crop.bottom) * scale.y)
