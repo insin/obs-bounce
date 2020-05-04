@@ -1,3 +1,11 @@
+--[[
+obs-bounce v1.0 - https://github.com/insin/obs-bounce
+
+Bounces a scene item around, DVD logo style.
+
+MIT Licensed
+]]--
+
 local obs = obslua
 local bit = require('bit')
 
