@@ -1,5 +1,5 @@
 --[[
-obs-bounce v1.0 - https://github.com/insin/obs-bounce
+obs-bounce v1.1 - https://github.com/insin/obs-bounce
 
 Bounces a scene item around, DVD logo style.
 
@@ -98,6 +98,11 @@ function on_event(event)
     if event == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
         if start_on_scene_change then
             scene_changed()
+        end
+    end
+    if event == obs.OBS_FRONTEND_EVENT_EXIT then
+        if active then
+            toggle()
         end
     end
 end
