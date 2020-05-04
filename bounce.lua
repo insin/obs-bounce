@@ -5,6 +5,8 @@ local bit = require('bit')
 local speed = 10
 --- name of the scene item to be moved
 local source_name = ''
+--- if true bouncing will auto start on scene change
+local start_on_scene_change = false
 --- the hotkey assigned to toggle_bounce in OBS's hotkey config
 local hotkey_id = obs.OBS_INVALID_HOTKEY_ID
 
@@ -60,12 +62,14 @@ function script_properties()
    for _, name in ipairs(get_source_names()) do
       obs.obs_property_list_add_string(source, name, name)
    end
+   obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
    obs.obs_properties_add_button(props, 'button', 'Toggle', toggle)
    return props
 end
 
 function script_update(settings)
    speed = obs.obs_data_get_int(settings, 'speed')
+   start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
    local old_source_name = source_name
    source_name = obs.obs_data_get_string(settings, 'source')
    -- don't lose original_pos when the speed config is changed!
@@ -79,6 +83,15 @@ function script_load(settings)
    local hotkey_save_array = obs.obs_data_get_array(settings, 'toggle_hotkey')
    obs.obs_hotkey_load(hotkey_id, hotkey_save_array)
    obs.obs_data_array_release(hotkey_save_array)
+   obs.obs_frontend_add_event_callback(on_event)
+end
+
+function on_event(event)
+    if event == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
+        if start_on_scene_change then
+            scene_changed()
+        end
+    end
 end
 
 function script_save(settings)
@@ -182,7 +195,8 @@ function toggle()
    end
 end
 
---- restores any currently-bouncing scene item to its original position
+--- restores any currently-bouncing scene item to its original position when
+--- the configured scene name is changed.
 function source_name_changed()
    local was_active = active
    if active then
@@ -192,6 +206,16 @@ function source_name_changed()
    if was_active then
       toggle()
    end
+end
+
+--- restores any currently-bouncing scene item to its original position and
+--- restarts bouncing on scene change.
+function scene_changed()
+   if active then
+      toggle()
+   end
+   find_scene_item()
+   toggle()
 end
 
 --- round a number to the nearest integer
