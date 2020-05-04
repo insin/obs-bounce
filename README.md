@@ -6,7 +6,9 @@ OBS script to bounce a scene item around, DVD logo style.
 
 Select the name of a scene item and press the Toggle button (or configure a Toggle Bounce hotkey) to start bouncing it around the scene.
 
-Currently only works for top-level source/groups in the current scene.
+Enable the "Start on scene change" option to automatically start bouncing when switching to the scene containing a scene item with the selected name and restore its position when switching away.
+
+Currently only works for top-level sources/groups in a scene.
 
 ## Demo
 
