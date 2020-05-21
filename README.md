@@ -1,6 +1,6 @@
 # obs-bounce
 
-OBS script to bounce a scene item around, DVD logo style.
+OBS script to bounce a scene item around, DVD logo style or throw & bounce with physics.
 
 ## Usage
 
@@ -12,4 +12,10 @@ Currently only works for top-level sources/groups in a scene.
 
 ## Demo
 
-[![Example video of a bouncing background logo](https://img.youtube.com/vi/FbtzencagAM/0.jpg)](https://www.youtube.com/watch?v=FbtzencagAM)
+### DVD Bounce Mode
+
+[![Example video of a background logo bouncing DVD logo style](https://img.youtube.com/vi/FbtzencagAM/0.jpg)](https://www.youtube.com/watch?v=FbtzencagAM)
+
+### Throw & Bounce Mode
+
+[![Example video of a background logo being thrown and bouncing with physics](https://img.youtube.com/vi/TtZ3PpDrpIY/0.jpg)](https://www.youtube.com/watch?v=TtZ3PpDrpIY)
