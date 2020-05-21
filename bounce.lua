@@ -1,7 +1,7 @@
 --[[
-obs-bounce v1.1 - https://github.com/insin/obs-bounce
+obs-bounce v1.2 - https://github.com/insin/obs-bounce
 
-Bounces a scene item around, DVD logo style.
+Bounces a scene item around, DVD logo style or throw & bounce with physics.
 
 MIT Licensed
 ]]--
@@ -9,21 +9,16 @@ MIT Licensed
 local obs = obslua
 local bit = require('bit')
 
---- number of pixels the scene item is moved by each tick
-local speed = 10
+-- type of bounce to be performed
+local bounce_type = 'dvd_bounce'
 --- name of the scene item to be moved
 local source_name = ''
 --- if true bouncing will auto start on scene change
 local start_on_scene_change = false
 --- the hotkey assigned to toggle_bounce in OBS's hotkey config
 local hotkey_id = obs.OBS_INVALID_HOTKEY_ID
-
 --- true when the scene item is being moved
 local active = false
---- if true the scene item is currently being moved down, otherwise up
-local moving_down = true
---- if true the scene item is currently being moved right, otherwise left
-local moving_right = true
 --- scene item to be moved
 local scene_item = nil
 --- original position the scene item was in before we started moving it
@@ -32,6 +27,31 @@ local original_pos = nil
 local scene_width = nil
 --- height of the scene the scene item belongs to
 local scene_height = nil
+
+-- DVD Bounce
+--- number of pixels the scene item is moved by each tick
+local speed = 10
+--- if true the scene item is currently being moved down, otherwise up
+local moving_down = true
+--- if true the scene item is currently being moved right, otherwise left
+local moving_right = true
+
+-- Throw & Bounce
+--- Range of initial horizontal velocity
+local throw_speed_x = 100
+--- Range of initial vertical velocity
+local throw_speed_y = 50
+--- current horizontal velocity
+local velocity_x = 0
+--- current vertical velocity
+local velocity_y = 0
+--- frames to wait before throwing again
+local wait_frames = 1
+-- physics config
+local gravity = 0.98
+local air_drag = 0.99
+local ground_friction = 0.95
+local elasticity = 0.8
 
 --- find the named scene item and its original position in the current scene
 local function find_scene_item()
@@ -60,7 +80,6 @@ end
 
 function script_properties()
    local props = obs.obs_properties_create()
-   obs.obs_properties_add_int(props, 'speed', 'Speed:', 1, 25, 1)
    local source = obs.obs_properties_add_list(
       props,
       'source',
@@ -70,19 +89,41 @@ function script_properties()
    for _, name in ipairs(get_source_names()) do
       obs.obs_property_list_add_string(source, name, name)
    end
+   local bounce_type = obs.obs_properties_add_list(
+      props,
+      'bounce_type',
+      'Bounce Type:',
+      obs.OBS_COMBO_TYPE_LIST,
+      obs.OBS_COMBO_FORMAT_STRING)
+   obs.obs_property_list_add_string(bounce_type, 'DVD Bounce', 'dvd_bounce')
+   obs.obs_property_list_add_string(bounce_type, 'Throw & Bounce', 'throw_bounce')
+   obs.obs_properties_add_int_slider(props, 'speed', 'DVD Bounce Speed:', 1, 30, 1)
+   obs.obs_properties_add_int_slider(props, 'throw_speed_x', 'Max Throw Speed (X):', 1, 200, 1)
+   obs.obs_properties_add_int_slider(props, 'throw_speed_y', 'Max Throw Speed (Y):', 1, 100, 1)
    obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
    obs.obs_properties_add_button(props, 'button', 'Toggle', toggle)
    return props
 end
 
+function script_defaults(settings)
+   obs.obs_data_set_default_string(settings, 'bounce_type', bounce_type)
+   obs.obs_data_set_default_int(settings, 'speed', speed)
+   obs.obs_data_set_default_int(settings, 'throw_speed_x', throw_speed_x)
+   obs.obs_data_set_default_int(settings, 'throw_speed_y', throw_speed_y)
+end
+
 function script_update(settings)
-   speed = obs.obs_data_get_int(settings, 'speed')
-   start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
    local old_source_name = source_name
    source_name = obs.obs_data_get_string(settings, 'source')
-   -- don't lose original_pos when the speed config is changed!
-   if old_source_name ~= source_name then
-      source_name_changed()
+   local old_bounce_type = bounce_type
+   bounce_type = obs.obs_data_get_string(settings, 'bounce_type')
+   speed = obs.obs_data_get_int(settings, 'speed')
+   throw_speed_x = obs.obs_data_get_int(settings, 'throw_speed_x')
+   throw_speed_y = obs.obs_data_get_int(settings, 'throw_speed_y')
+   start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
+   -- don't lose original_pos when config is changed
+   if old_source_name ~= source_name or old_bounce_type ~= bounce_type then
+      restart_if_active()
    end
 end
 
@@ -115,7 +156,11 @@ end
 
 function script_tick(seconds)
    if active then
-      move_scene_item(scene_item)
+      if bounce_type == 'dvd_bounce' then
+         move_scene_item(scene_item)
+      elseif bounce_type == 'throw_bounce' then
+         throw_scene_item(scene_item)
+      end
    end
 end
 
@@ -161,8 +206,7 @@ function get_scene_item_scale(scene_item)
    return scale
 end
 
---- move a scene item the next step in the current directions being moved
-function move_scene_item(scene_item)
+function get_scene_item_dimensions(scene_item)
    local pos = get_scene_item_pos(scene_item)
    local scale = get_scene_item_scale(scene_item)
    local crop = get_scene_item_crop(scene_item)
@@ -170,7 +214,12 @@ function move_scene_item(scene_item)
    -- displayed dimensions need to account for cropping and scaling
    local width = round((obs.obs_source_get_width(source) - crop.left - crop.right) * scale.x)
    local height = round((obs.obs_source_get_height(source) - crop.top - crop.bottom) * scale.y)
+   return pos, width, height
+end
 
+--- move a scene item the next step in the current directions being moved
+function move_scene_item(scene_item)
+   local pos, width, height = get_scene_item_dimensions(scene_item)
    local next_pos = obs.vec2()
 
    if moving_right and pos.x + width < scene_width then
@@ -192,10 +241,70 @@ function move_scene_item(scene_item)
    obs.obs_sceneitem_set_pos(scene_item, next_pos)
 end
 
---- toggle moving the scene item, restoring its original position if stopping
+--- throw a scene item and let it come to rest with physics
+function throw_scene_item(scene_item)
+   if velocity_x == 0 and velocity_y == 0 then
+      wait_frames = wait_frames - 1
+      if wait_frames == 0 then
+         velocity_x = math.random(-throw_speed_x, throw_speed_x)
+         velocity_y = -round(throw_speed_y * 0.5) - math.random(round(throw_speed_y * 0.5))
+      end
+      return
+   end
+
+   if velocity_y == 0 and velocity_x < 0.75 then
+      velocity_x = 0
+      wait_frames = 60 * 1
+      return
+   end
+
+   local pos, width, height = get_scene_item_dimensions(scene_item)
+   local next_pos = obs.vec2()
+
+   local was_bottomed = pos.y == scene_height - height
+
+   next_pos.x = pos.x + velocity_x
+   next_pos.y = pos.y + velocity_y
+
+   -- bounce off the bottom
+   if next_pos.y >= scene_height - height then
+      next_pos.y = scene_height - height
+      if was_bottomed then
+         velocity_y = 0
+      else
+         velocity_y = -(velocity_y * elasticity)
+      end
+   end
+
+   -- bounce off the sides
+   if next_pos.x >= scene_width - width or next_pos.x <= 0 then
+      if next_pos.x <= 0 then
+         next_pos.x = 0
+      else
+         next_pos.x = scene_width - width
+      end
+      velocity_x = -(velocity_x * elasticity)
+   end
+
+   if velocity_y ~= 0 then
+      velocity_y = velocity_y + gravity
+      velocity_y = velocity_y * air_drag
+   end
+   velocity_x = velocity_x * air_drag
+
+   if next_pos.y == scene_height - height then
+      velocity_x = velocity_x * ground_friction
+   end
+
+   obs.obs_sceneitem_set_pos(scene_item, next_pos)
+end
+
+--- toggle bouncing the scene item, restoring its original position if stopping
 function toggle()
    if active then
       active = false
+      velocity_x = 0
+      velocity_y = 0
       if scene_item then
          obs.obs_sceneitem_set_pos(scene_item, original_pos)
       end
@@ -205,12 +314,16 @@ function toggle()
    if not scene_item then find_scene_item() end
    if scene_item then
       active = true
+      if bounce_type == 'throw_bounce' then
+         velocity_x = math.random(-throw_speed_x, throw_speed_x)
+         velocity_y = -math.random(throw_speed_y)
+      end
    end
 end
 
---- restores any currently-bouncing scene item to its original position when
---- the configured scene name is changed.
-function source_name_changed()
+--- restores any currently-bouncing scene item to its original position and
+--- restarts, if it was active.
+function restart_if_active()
    local was_active = active
    if active then
       toggle()
