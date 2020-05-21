@@ -14,8 +14,8 @@ Currently only works for top-level sources/groups in a scene.
 
 ### DVD Bounce Mode
 
-[![Example video of a background logo bouncing DVD logo style](https://img.youtube.com/vi/FbtzencagAM/0.jpg)](https://www.youtube.com/watch?v=FbtzencagAM)
+[![Example video of a background logo bouncing DVD logo style](https://img.youtube.com/vi/FbtzencagAM/sddefault.jpg)](https://www.youtube.com/watch?v=FbtzencagAM)
 
 ### Throw & Bounce Mode
 
-[![Example video of a background logo being thrown and bouncing with physics](https://img.youtube.com/vi/TtZ3PpDrpIY/0.jpg)](https://www.youtube.com/watch?v=TtZ3PpDrpIY)
+[![Example video of a background logo being thrown and bouncing with physics](https://img.youtube.com/vi/TtZ3PpDrpIY/sddefault.jpg)](https://www.youtube.com/watch?v=TtZ3PpDrpIY)
