@@ -1,6 +1,6 @@
 # obs-bounce
 
-OBS script to bounce a scene item around, DVD logo style or throw & bounce with physics.
+OBS script to bounce a scene item around, DVD logo style, let it slide around the edges or throw & bounce with physics.
 
 ## Usage
 
