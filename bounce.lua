@@ -97,7 +97,8 @@ function script_properties()
       obs.OBS_COMBO_FORMAT_STRING)
    obs.obs_property_list_add_string(bounce_type, 'DVD Bounce', 'dvd_bounce')
    obs.obs_property_list_add_string(bounce_type, 'Throw & Bounce', 'throw_bounce')
-   obs.obs_properties_add_int_slider(props, 'speed', 'DVD Bounce Speed:', 1, 30, 1)
+   obs.obs_property_list_add_string(bounce_type, 'Go around the edges', 'go_around')
+   obs.obs_properties_add_int_slider(props, 'speed', '(non-throwing) Speed:', 1, 30, 1)
    obs.obs_properties_add_int_slider(props, 'throw_speed_x', 'Max Throw Speed (X):', 1, 200, 1)
    obs.obs_properties_add_int_slider(props, 'throw_speed_y', 'Max Throw Speed (Y):', 1, 100, 1)
    obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
@@ -160,6 +161,8 @@ function script_tick(seconds)
          move_scene_item(scene_item)
       elseif bounce_type == 'throw_bounce' then
          throw_scene_item(scene_item)
+      elseif bounce_type == 'go_around' then
+         go_around(scene_item)    
       end
    end
 end
@@ -298,6 +301,33 @@ function throw_scene_item(scene_item)
 
    obs.obs_sceneitem_set_pos(scene_item, next_pos)
 end
+
+
+function go_around(scene_item)
+   local pos, width, height = get_scene_item_dimensions(scene_item)
+   local next_pos = obs.vec2()
+
+   if moving_right and moving_down then
+      next_pos.x = math.min(pos.x + speed, scene_width - width)
+      next_pos.y = pos.y
+        if next_pos.x == scene_width - width then moving_right = false end
+   elseif (not moving_right) and moving_down then
+      next_pos.y = math.min(pos.y + speed, scene_height - height)
+      next_pos.x = pos.x
+      if next_pos.y == scene_height - height then moving_down = false end
+   elseif (not moving_right) and (not moving_down) then
+      next_pos.x = math.max(pos.x - speed, 0)
+      next_pos.y = pos.y
+      if next_pos.x == 0 then moving_right = true end
+   elseif moving_right and (not moving_down) then
+      next_pos.y = math.max(pos.y - speed, 0)
+      next_pos.x = pos.x
+      if next_pos.y == 0 then moving_down = true end
+    end
+   obs.obs_sceneitem_set_pos(scene_item, next_pos)
+end
+
+
 
 --- toggle bouncing the scene item, restoring its original position if stopping
 function toggle()
