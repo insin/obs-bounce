@@ -45,8 +45,11 @@ local throw_speed_y = 50
 local velocity_x = 0
 --- current vertical velocity
 local velocity_y = 0
---- frames to wait before throwing again
-local wait_frames = 1
+--- current maximum and minimal frames to wait before throwing again
+local max_frames = 10
+local min_frames = 60
+--- frames to wait before throwing again. This variable is randomized or set using the max and min timer variables above. 
+local wait_frames = 0
 -- physics config
 local gravity = 0.98
 local air_drag = 0.99
@@ -100,6 +103,9 @@ function script_properties()
    obs.obs_properties_add_int_slider(props, 'speed', 'DVD Bounce Speed:', 1, 30, 1)
    obs.obs_properties_add_int_slider(props, 'throw_speed_x', 'Max Throw Speed (X):', 1, 200, 1)
    obs.obs_properties_add_int_slider(props, 'throw_speed_y', 'Max Throw Speed (Y):', 1, 100, 1)
+   obs.obs_properties_add_int(props, 'min_timer_op', 'Shortest time until next throw (seconds)', 1, 3600, 1)
+   obs.obs_properties_add_int(props, 'max_timer_op', 'Longest amount of time until next throw(seconds)', 1, 3600, 1 )
+
    obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
    obs.obs_properties_add_button(props, 'button', 'Toggle', toggle)
    return props
@@ -110,6 +116,8 @@ function script_defaults(settings)
    obs.obs_data_set_default_int(settings, 'speed', speed)
    obs.obs_data_set_default_int(settings, 'throw_speed_x', throw_speed_x)
    obs.obs_data_set_default_int(settings, 'throw_speed_y', throw_speed_y)
+   obs.obs_data_set_default_int(settings, 'min_timer_op', min_timer_op)
+   obs.obs_data_set_default_int(settings, 'max_timer_op', max_timer_op)
 end
 
 function script_update(settings)
@@ -120,6 +128,8 @@ function script_update(settings)
    speed = obs.obs_data_get_int(settings, 'speed')
    throw_speed_x = obs.obs_data_get_int(settings, 'throw_speed_x')
    throw_speed_y = obs.obs_data_get_int(settings, 'throw_speed_y')
+   min_timer_op = obs.obs_data_get_int(settings, 'min_timer_op')
+   max_timer_op = obs.obs_data_get_int(settings, 'max_timer_op')
    start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
    -- don't lose original_pos when config is changed
    if old_source_name ~= source_name or old_bounce_type ~= bounce_type then
@@ -254,7 +264,7 @@ function throw_scene_item(scene_item)
 
    if velocity_y == 0 and velocity_x < 0.75 then
       velocity_x = 0
-      wait_frames = 60 * 1
+      wait_frames = math.random(min_timer_op, max_timer_op) * 60 
       return
    end
 
