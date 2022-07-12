@@ -52,8 +52,8 @@ local min_frames = 60
 --- frames to wait before throwing again. This variable is randomized or set using the max and min timer variables above. 
 local wait_frames = 0
 -- physics config
-local gravity = 0.98
-local air_drag = 0.99
+local gravity = 100           -- Gravity used to be 0.98. OBS didn't like using float so to still having the option to be accurate I instead increased the gravity by 100 times here. 
+local air_drag = 0.99         -- Later in the code it gets divided by 100 again. Making sure the ratio stays the same while still giving people the option to change strength with accuracy
 local ground_friction = 0.95
 local elasticity = 0.8
 
@@ -106,7 +106,7 @@ function script_properties()
    obs.obs_properties_add_int_slider(props, 'throw_speed_y', 'Max Throw Speed (Y):', 1, 100, 1)
    obs.obs_properties_add_int(props, 'min_frames', 'Shortest time until next throw (seconds)', 1, 3600, 1)
    obs.obs_properties_add_int(props, 'max_frames', 'Longest amount of time until next throw(seconds)', 1, 3600, 1 )
-
+   obs.obs_properties_add_int_slider(props, 'gravity', 'Strength of gravity (%) (Default is 100%)', 1, 300, 1)
    obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
    obs.obs_properties_add_button(props, 'button', 'Toggle', toggle)
    return props
@@ -119,6 +119,7 @@ function script_defaults(settings)
    obs.obs_data_set_default_int(settings, 'throw_speed_y', throw_speed_y)
    obs.obs_data_set_default_int(settings, 'min_frames', min_frames)
    obs.obs_data_set_default_int(settings, 'max_frames', max_frames)
+   obs.obs_data_set_default_int(settings, 'gravity', gravity)
 end
 
 function script_update(settings)
@@ -131,6 +132,7 @@ function script_update(settings)
    throw_speed_y = obs.obs_data_get_int(settings, 'throw_speed_y')
    min_frames= obs.obs_data_get_int(settings, 'min_frames')
    max_frames = obs.obs_data_get_int(settings, 'max_frames')
+   gravity = obs.obs_data_get_int(settings, 'gravity') / 100
    start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
    -- don't lose original_pos when config is changed
    if old_source_name ~= source_name or old_bounce_type ~= bounce_type then
