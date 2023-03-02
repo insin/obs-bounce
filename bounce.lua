@@ -17,6 +17,8 @@ local source_name = ''
 local start_on_scene_change = false
 --- the hotkey assigned to toggle_bounce in OBS's hotkey config
 local hotkey_id = obs.OBS_INVALID_HOTKEY_ID
+--- indicates if the hotkey is being held down
+local hotkey_pressed = false
 --- true when the scene item is being moved
 local active = false
 --- scene item to be moved
@@ -301,6 +303,14 @@ end
 
 --- toggle bouncing the scene item, restoring its original position if stopping
 function toggle()
+   --- this is not 100% reliable, but it fixes the toggle hotkey to behave like a toggle, instead of having to hold it down
+   --- it would be better if we could differentiate between the keyDown and keyUp events so this could be triggered only on 
+   --- either of the events, but I have no idea how one would do that
+   if hotkey_pressed then
+      hotkey_pressed = false
+      return
+   end
+   hotkey_pressed = true
    if active then
       active = false
       velocity_x = 0
