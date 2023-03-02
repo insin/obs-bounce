@@ -1,5 +1,7 @@
 --[[
-obs-bounce v1.2 - https://github.com/insin/obs-bounce
+Copyright (C) 2023  Jonny Buchanan, Sebastian M. Reuter
+
+obs-bounce v1.3 - https://github.com/Gambloide/obs-bounce
 
 Bounces a scene item around, DVD logo style or throw & bounce with physics.
 
