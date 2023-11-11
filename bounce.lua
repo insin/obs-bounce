@@ -15,6 +15,8 @@ local bounce_type = 'dvd_bounce'
 local source_name = ''
 --- if true bouncing will auto start on scene change
 local start_on_scene_change = false
+--- if true bouncing will be toggled following the item visiblity
+local follow_item_visibility = false
 --- the hotkey assigned to toggle_bounce in OBS's hotkey config
 local hotkey_id = obs.OBS_INVALID_HOTKEY_ID
 --- true when the scene item is being moved
@@ -69,8 +71,16 @@ local function find_scene_item()
       original_pos = get_scene_item_pos(scene_item)
       return true
    end
-   print(source_name..' not found')
+   -- print(source_name..' not found')
    return false
+end
+
+function is_scene_item_visible(scene_item)
+    if scene_item then
+        local visible = obs.obs_sceneitem_visible(scene_item)
+        return visible
+    end
+    return false
 end
 
 function script_description()
@@ -101,6 +111,7 @@ function script_properties()
    obs.obs_properties_add_int_slider(props, 'throw_speed_x', 'Max Throw Speed (X):', 1, 200, 1)
    obs.obs_properties_add_int_slider(props, 'throw_speed_y', 'Max Throw Speed (Y):', 1, 100, 1)
    obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
+   obs.obs_properties_add_bool(props, 'follow_item_visibility', 'Follow Item Visibility')
    obs.obs_properties_add_button(props, 'button', 'Toggle', toggle)
    return props
 end
@@ -110,6 +121,7 @@ function script_defaults(settings)
    obs.obs_data_set_default_int(settings, 'speed', speed)
    obs.obs_data_set_default_int(settings, 'throw_speed_x', throw_speed_x)
    obs.obs_data_set_default_int(settings, 'throw_speed_y', throw_speed_y)
+   obs.obs_data_set_default_bool(settings, 'follow_item_visibility', true)
 end
 
 function script_update(settings)
@@ -121,6 +133,7 @@ function script_update(settings)
    throw_speed_x = obs.obs_data_get_int(settings, 'throw_speed_x')
    throw_speed_y = obs.obs_data_get_int(settings, 'throw_speed_y')
    start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
+   follow_item_visibility = obs.obs_data_get_bool(settings, 'follow_item_visibility')
    -- don't lose original_pos when config is changed
    if old_source_name ~= source_name or old_bounce_type ~= bounce_type then
       restart_if_active()
@@ -155,13 +168,32 @@ function script_save(settings)
 end
 
 function script_tick(seconds)
-   if active then
-      if bounce_type == 'dvd_bounce' then
-         move_scene_item(scene_item)
-      elseif bounce_type == 'throw_bounce' then
-         throw_scene_item(scene_item)
-      end
-   end
+    -- Check if a source is selected
+    if source_name == nil or source_name == '' then
+        return
+    end
+
+    -- Find the scene item if it's not already found
+    if not scene_item and not find_scene_item() then
+        return
+    end
+
+    -- If "Follow item visibility" is set, use the item's visibility to
+   -- control the animation
+    if follow_item_visibility then
+        active = is_scene_item_visible(scene_item)
+    end
+
+    -- Animate only if active
+    if not active then
+        return
+    end
+
+    if bounce_type == 'dvd_bounce' then
+        move_scene_item(scene_item)
+    elseif bounce_type == 'throw_bounce' then
+        throw_scene_item(scene_item)
+    end
 end
 
 --- get a list of source names, sorted alphabetically
