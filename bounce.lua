@@ -66,7 +66,7 @@ local function find_scene_item()
    scene_height = obs.obs_source_get_height(source)
    local scene = obs.obs_scene_from_source(source)
    obs.obs_source_release(source)
-   scene_item = obs.obs_scene_find_source(scene, source_name)
+   scene_item = obs.obs_scene_find_source_recursive(scene, source_name)
    if scene_item then
       original_pos = get_scene_item_pos(scene_item)
       return true
