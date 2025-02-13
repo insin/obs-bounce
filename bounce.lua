@@ -46,7 +46,7 @@ local velocity_x = 0
 --- current vertical velocity
 local velocity_y = 0
 --- frames to wait before throwing again
-local wait_frames = 1
+local wait_frames = 0
 -- physics config
 local gravity = 0.98
 local air_drag = 0.99
@@ -243,7 +243,7 @@ end
 
 --- throw a scene item and let it come to rest with physics
 function throw_scene_item(scene_item)
-   if velocity_x == 0 and velocity_y == 0 then
+   if velocity_x == 0 and velocity_y == 0 and wait_frames > 0 then
       wait_frames = wait_frames - 1
       if wait_frames == 0 then
          velocity_x = math.random(-throw_speed_x, throw_speed_x)
