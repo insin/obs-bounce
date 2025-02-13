@@ -8,7 +8,10 @@ Select the name of a scene item and press the Toggle button (or configure a Togg
 
 Enable the "Start on scene change" option to automatically start bouncing when switching to a scene containing a scene item with the selected name and restore its position when switching away.
 
-Currently only works for top-level sources/groups in a scene.
+To enable changing color on each bounce in DVD Bounce mode, add a Color Correction filter to the scene item and the script will change its Color Add setting.
+
+> [!NOTE]
+> Currently only works for top-level sources/groups in a scene.
 
 ## Demo
 

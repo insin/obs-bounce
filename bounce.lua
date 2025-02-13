@@ -3,18 +3,21 @@ obs-bounce v1.2 - https://github.com/insin/obs-bounce
 
 Bounces a scene item around, DVD logo style or throw & bounce with physics.
 
+To enable changing color on DVD bounces, add a Color Correction filter to the scene item.
+
 MIT Licensed
 ]]--
 
 local obs = obslua
 local bit = require('bit')
 
--- type of bounce to be performed
+-- Shared config
+--- type of bounce to be performed (dvd_bounce or throw_bounce)
 local bounce_type = 'dvd_bounce'
 --- name of the scene item to be moved
 local source_name = ''
---- if true bouncing will auto start on scene change
-local start_on_scene_change = false
+--- if true bouncing will auto start and stop on scene change
+local start_on_scene_change = true
 --- the hotkey assigned to toggle_bounce in OBS's hotkey config
 local hotkey_id = obs.OBS_INVALID_HOTKEY_ID
 --- true when the scene item is being moved
@@ -30,11 +33,27 @@ local scene_height = nil
 
 -- DVD Bounce
 --- number of pixels the scene item is moved by each tick
-local speed = 10
+local speed = 3
 --- if true the scene item is currently being moved down, otherwise up
 local moving_down = true
 --- if true the scene item is currently being moved right, otherwise left
 local moving_right = true
+--- if true bounces will change the scene item's Color Correction filter's color_add setting
+local dvd_bounces_change_color = true
+--- the scene item's Color Correction filter, if it has one
+local color_filter = nil
+--- original color_add of the scene item's Color Correction filter before we started changing it
+local original_color_add = nil
+--- colors to cycle through on bounces (format: 0xBBGGRR)
+local dvd_colors = {
+   0xFFFE00, -- cyan
+   0x0083FF, -- orange
+   0xFF2600, -- blue
+   0x01FAFF, -- yellow
+   0x0026FF, -- red
+   0x8B00FF, -- pink
+   0xFF00BE  -- purple
+}
 
 -- Throw & Bounce
 --- Range of initial horizontal velocity
@@ -53,24 +72,28 @@ local air_drag = 0.99
 local ground_friction = 0.95
 local elasticity = 0.8
 
---- find the named scene item and its original position in the current scene
+--- find the named scene item in the current scene
+--- store its original position and color_add, to be restored when we stop bouncing it
 local function find_scene_item()
    local source = obs.obs_frontend_get_current_scene()
    if not source then
-      print('there is no current scene')
       return
    end
+
    scene_width = obs.obs_source_get_width(source)
    scene_height = obs.obs_source_get_height(source)
    local scene = obs.obs_scene_from_source(source)
    obs.obs_source_release(source)
+
    scene_item = obs.obs_scene_find_source(scene, source_name)
-   if scene_item then
-      original_pos = get_scene_item_pos(scene_item)
-      return true
+   if not scene_item then
+      return
    end
-   print(source_name..' not found')
-   return false
+
+   original_pos = get_scene_item_pos(scene_item)
+   if bounce_type == 'dvd_bounce' and dvd_bounces_change_color then
+      get_color_filter()
+   end
 end
 
 function script_description()
@@ -98,15 +121,17 @@ function script_properties()
    obs.obs_property_list_add_string(bounce_type, 'DVD Bounce', 'dvd_bounce')
    obs.obs_property_list_add_string(bounce_type, 'Throw & Bounce', 'throw_bounce')
    obs.obs_properties_add_int_slider(props, 'speed', 'DVD Bounce Speed:', 1, 30, 1)
+   obs.obs_properties_add_bool(props, 'dvd_bounces_change_color', 'Change color on DVD bounce')
    obs.obs_properties_add_int_slider(props, 'throw_speed_x', 'Max Throw Speed (X):', 1, 200, 1)
    obs.obs_properties_add_int_slider(props, 'throw_speed_y', 'Max Throw Speed (Y):', 1, 100, 1)
-   obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Start on scene change')
+   obs.obs_properties_add_bool(props, 'start_on_scene_change', 'Auto start/stop on scene change')
    obs.obs_properties_add_button(props, 'button', 'Toggle', toggle)
    return props
 end
 
 function script_defaults(settings)
    obs.obs_data_set_default_string(settings, 'bounce_type', bounce_type)
+   obs.obs_data_set_default_bool(settings, 'dvd_bounces_change_color', dvd_bounces_change_color)
    obs.obs_data_set_default_int(settings, 'speed', speed)
    obs.obs_data_set_default_int(settings, 'throw_speed_x', throw_speed_x)
    obs.obs_data_set_default_int(settings, 'throw_speed_y', throw_speed_y)
@@ -118,12 +143,23 @@ function script_update(settings)
    local old_bounce_type = bounce_type
    bounce_type = obs.obs_data_get_string(settings, 'bounce_type')
    speed = obs.obs_data_get_int(settings, 'speed')
+   local old_dvd_bounces_change_color = dvd_bounces_change_color
+   dvd_bounces_change_color = obs.obs_data_get_bool(settings, 'dvd_bounces_change_color')
    throw_speed_x = obs.obs_data_get_int(settings, 'throw_speed_x')
    throw_speed_y = obs.obs_data_get_int(settings, 'throw_speed_y')
    start_on_scene_change = obs.obs_data_get_bool(settings, 'start_on_scene_change')
-   -- don't lose original_pos when config is changed
+
+   -- reconfigure and restart if the scene item name or bounce type has changed
    if old_source_name ~= source_name or old_bounce_type ~= bounce_type then
       restart_if_active()
+   -- reconfigure if dvd_bounces_change_color changed and is relevant
+   elseif bounce_type == 'dvd_bounce' and old_dvd_bounces_change_color ~= dvd_bounces_change_color then
+      restore_original_color()
+      if dvd_bounces_change_color then
+         get_color_filter()
+      else
+         release_color_filter_reference()
+      end
    end
 end
 
@@ -136,16 +172,18 @@ function script_load(settings)
 end
 
 function on_event(event)
-    if event == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
-        if start_on_scene_change then
-            scene_changed()
-        end
-    end
-    if event == obs.OBS_FRONTEND_EVENT_EXIT then
-        if active then
-            toggle()
-        end
-    end
+   if event == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
+      if start_on_scene_change then
+         scene_changed()
+      end
+   end
+   if event == obs.OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN then
+      if active then
+         stop()
+      else
+         release_color_filter_reference()
+      end
+   end
 end
 
 function script_save(settings)
@@ -162,6 +200,35 @@ function script_tick(seconds)
          throw_scene_item(scene_item)
       end
    end
+end
+
+function get_color_filter()
+   release_color_filter_reference()
+   color_filter = get_filter_by_id(scene_item, 'color_filter')
+   if color_filter then
+      obs.script_log(obs.LOG_INFO, 'got color_filter reference')
+      local settings = obs.obs_source_get_settings(color_filter)
+      original_color_add = obs.obs_data_get_int(settings, 'color_add')
+      obs.obs_data_release(settings)
+   end
+end
+
+function release_color_filter_reference()
+   if color_filter then
+      obs.script_log(obs.LOG_INFO, 'releasing color_filter reference')
+      obs.obs_source_release(color_filter)
+      color_filter = nil
+   end
+end
+
+function get_filter_by_id(scene_item, filter_id)
+   local filters = obs.obs_source_enum_filters(obs.obs_sceneitem_get_source(scene_item))
+   for _, filter in pairs(filters) do
+      if obs.obs_source_get_unversioned_id(filter) == filter_id then
+         return filter
+      end
+   end
+   return nil
 end
 
 --- get a list of source names, sorted alphabetically
@@ -221,6 +288,8 @@ end
 function move_scene_item(scene_item)
    local pos, width, height = get_scene_item_dimensions(scene_item)
    local next_pos = obs.vec2()
+   local was_moving_right = moving_right
+   local was_moving_down = moving_down
 
    if moving_right and pos.x + width < scene_width then
       next_pos.x = math.min(pos.x + speed, scene_width - width)
@@ -236,6 +305,31 @@ function move_scene_item(scene_item)
       moving_down = false
       next_pos.y = math.max(pos.y - speed, 0)
       if next_pos.y == 0 then moving_down = true end
+   end
+
+   -- cycle through dvd_colors on bounces
+   local bounced = was_moving_right ~= moving_right or was_moving_down ~= moving_down
+   if dvd_bounces_change_color and color_filter and bounced then
+      local settings = obs.obs_source_get_settings(color_filter)
+      local next_color = nil
+      -- restore the original color if we hit the corner
+      if was_moving_right ~= moving_right and was_moving_down ~= moving_down then
+         next_color = original_color_add
+      else
+         local current_color = obs.obs_data_get_int(settings, 'color_add')
+         for i, color in ipairs(dvd_colors) do
+            if color == current_color then
+               next_color = dvd_colors[(i % #dvd_colors) + 1]
+               break
+            end
+         end
+         if not next_color then
+            next_color = dvd_colors[1]
+         end
+      end
+      obs.obs_data_set_int(settings, 'color_add', next_color)
+      obs.obs_source_update(color_filter, settings)
+      obs.obs_data_release(settings)
    end
 
    obs.obs_sceneitem_set_pos(scene_item, next_pos)
@@ -299,20 +393,10 @@ function throw_scene_item(scene_item)
    obs.obs_sceneitem_set_pos(scene_item, next_pos)
 end
 
---- toggle bouncing the scene item, restoring its original position if stopping
-function toggle()
-   if active then
-      active = false
-      velocity_x = 0
-      velocity_y = 0
-      if scene_item then
-         obs.obs_sceneitem_set_pos(scene_item, original_pos)
-      end
-      scene_item = nil
-      return
-   end
-   if not scene_item then find_scene_item() end
+--- start bouncing the scene item
+function start()
    if scene_item then
+      obs.script_log(obs.LOG_INFO, 'starting bounce')
       active = true
       if bounce_type == 'throw_bounce' then
          velocity_x = math.random(-throw_speed_x, throw_speed_x)
@@ -321,27 +405,77 @@ function toggle()
    end
 end
 
---- restores any currently-bouncing scene item to its original position and
---- restarts, if it was active.
-function restart_if_active()
-   local was_active = active
+--- stop bouncing the scene item, restoring its original position and color
+function stop()
    if active then
-      toggle()
-   end
-   find_scene_item()
-   if was_active then
-      toggle()
+      obs.script_log(obs.LOG_INFO, 'stopping bounce')
+      active = false
+      velocity_x = 0
+      velocity_y = 0
+      if scene_item then
+         obs.script_log(obs.LOG_INFO, 'restoring original position')
+         obs.obs_sceneitem_set_pos(scene_item, original_pos)
+         if color_filter then
+            restore_original_color()
+            release_color_filter_reference()
+            original_color_add = nil
+         end
+         scene_item = nil
+      end
    end
 end
 
---- restores any currently-bouncing scene item to its original position and
---- restarts bouncing on scene change.
-function scene_changed()
+--- toggle bouncing the scene item
+function toggle()
    if active then
-      toggle()
+      stop()
+   else
+      if not scene_item then
+         find_scene_item()
+      end
+      if scene_item then
+         start()
+      end
+   end
+end
+
+--- restore the original color_add of a scene item's Color Correction filter
+function restore_original_color()
+   if color_filter then
+      local settings = obs.obs_source_get_settings(color_filter)
+      local current_color_add = obs.obs_data_get_int(settings, 'color_add')
+      if current_color_add ~= original_color_add then
+         obs.script_log(obs.LOG_INFO, 'restoring original color')
+         obs.obs_data_set_int(settings, 'color_add', original_color_add)
+         obs.obs_source_update(color_filter, settings)
+      end
+      obs.obs_data_release(settings)
+   end
+end
+
+--- if it's active, restores the currently-bouncing scene item to its original position and color
+--- and restarts bouncing
+function restart_if_active()
+   local was_active = active
+   if active then
+      stop()
    end
    find_scene_item()
-   toggle()
+   if was_active then
+      start()
+   end
+end
+
+--- on scene change, stops bouncing the scene item if it's currently bouncing. If the scene item is
+--- present in the current scene, starts bouncing it.
+function scene_changed()
+   if active then
+      stop()
+   end
+   find_scene_item()
+   if scene_item then
+      start()
+   end
 end
 
 --- round a number to the nearest integer
