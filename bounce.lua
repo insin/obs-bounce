@@ -1,5 +1,5 @@
 --[[
-obs-bounce v1.2 - https://github.com/insin/obs-bounce
+obs-bounce v1.3 - https://github.com/insin/obs-bounce
 
 Bounces a scene item around, DVD logo style or throw & bounce with physics.
 
