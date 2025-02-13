@@ -35,9 +35,9 @@ local scene_height = nil
 --- number of pixels the scene item is moved by each tick
 local speed = 3
 --- if true the scene item is currently being moved down, otherwise up
-local moving_down = true
+local moving_down = math.random() < 0.5
 --- if true the scene item is currently being moved right, otherwise left
-local moving_right = true
+local moving_right = math.random() < 0.5
 --- if true bounces will change the scene item's Color Correction filter's color_add setting
 local dvd_bounces_change_color = true
 --- the scene item's Color Correction filter, if it has one
@@ -418,6 +418,8 @@ function start()
    if scene_item then
       obs.script_log(obs.LOG_INFO, 'starting bounce')
       active = true
+      moving_down = math.random() < 0.5
+      moving_right = math.random() < 0.5
       special_bounce = false
       if bounce_type == 'throw_bounce' then
          velocity_x = math.random(-throw_speed_x, throw_speed_x)
