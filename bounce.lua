@@ -54,6 +54,10 @@ local dvd_colors = {
    0x8B00FF, -- pink
    0xFF00BE  -- purple
 }
+--- set to true after we hit a corner, until the next bounce
+local special_bounce = false
+--- used to cycle through HSV colors, 0-360
+local hsv_color_degrees = 0
 
 -- Throw & Bounce
 --- Range of initial horizontal velocity
@@ -307,15 +311,31 @@ function move_scene_item(scene_item)
       if next_pos.y == 0 then moving_down = true end
    end
 
-   -- cycle through dvd_colors on bounces
+   -- change color on bounces
    local bounced = was_moving_right ~= moving_right or was_moving_down ~= moving_down
-   if dvd_bounces_change_color and color_filter and bounced then
+   if bounced then
+      special_bounce = was_moving_right ~= moving_right and was_moving_down ~= moving_down
+      if special_bounce then
+         obs.script_log(obs.LOG_INFO, 'special bounce!')
+         hsv_color_degrees = 0
+      end
+   end
+   if dvd_bounces_change_color and color_filter and (bounced or special_bounce) then
       local settings = obs.obs_source_get_settings(color_filter)
       local next_color = nil
-      -- restore the original color if we hit the corner
-      if was_moving_right ~= moving_right and was_moving_down ~= moving_down then
-         next_color = original_color_add
+      if special_bounce then
+         -- cycle through rainbow colors after hitting the corner
+         local r, g, b = HSV(hsv_color_degrees / 360, 1, 1)
+         r = math.floor(r * 255 + 0.5)
+         g = math.floor(g * 255 + 0.5)
+         b = math.floor(b * 255 + 0.5)
+         next_color = bit.bor(bit.lshift(b, 16), bit.lshift(g, 8), r)
+         hsv_color_degrees = hsv_color_degrees + 8
+         if hsv_color_degrees > 360 then
+            hsv_color_degrees = 0
+         end
       else
+         -- cycle through dvd_colors after single bounces
          local current_color = obs.obs_data_get_int(settings, 'color_add')
          for i, color in ipairs(dvd_colors) do
             if color == current_color then
@@ -398,6 +418,7 @@ function start()
    if scene_item then
       obs.script_log(obs.LOG_INFO, 'starting bounce')
       active = true
+      special_bounce = false
       if bounce_type == 'throw_bounce' then
          velocity_x = math.random(-throw_speed_x, throw_speed_x)
          velocity_y = -math.random(throw_speed_y)
@@ -481,4 +502,27 @@ end
 --- round a number to the nearest integer
 function round(n)
    return math.floor(n + 0.5)
+end
+
+--- https://love2d.org/wiki/HSV_color
+function HSV(h, s, v)
+   if s <= 0 then return v,v,v end
+   h = h*6
+   local c = v*s
+   local x = (1-math.abs((h%2)-1))*c
+   local m,r,g,b = (v-c), 0, 0, 0
+   if h < 1 then
+      r, g, b = c, x, 0
+   elseif h < 2 then
+      r, g, b = x, c, 0
+   elseif h < 3 then
+      r, g, b = 0, c, x
+   elseif h < 4 then
+      r, g, b = 0, x, c
+   elseif h < 5 then
+      r, g, b = x, 0, c
+   else
+      r, g, b = c, 0, x
+   end
+   return r+m, g+m, b+m
 end
