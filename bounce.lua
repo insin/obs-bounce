@@ -3,7 +3,8 @@ obs-bounce v1.2 - https://github.com/insin/obs-bounce
 
 Bounces a scene item around, DVD logo style or throw & bounce with physics.
 
-To enable changing color on DVD bounces, add a Color Correction filter to the scene item.
+To enable changing color on DVD bounces, add a Color Correction filter to the scene item. Set the
+filter's Color Add setting to the default color you want to use until the first bounce.
 
 MIT Licensed
 ]]--
